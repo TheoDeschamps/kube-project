@@ -43,5 +43,6 @@
       - iptables
       - conntrack-tools
       - socat
+      - iproute-tc
     state: present
     update_cache: true

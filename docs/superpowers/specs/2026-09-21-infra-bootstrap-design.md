@@ -133,8 +133,13 @@ pousse vers le repo école sur une branche à son nom.
      Kubernetes ;
    - `containerd` : runtime de conteneurs ;
    - `kubeadm-init` : exécuté uniquement sur kube-1, avec
-     `--control-plane-endpoint` pointant l'IP publique stable de kube-1 (pour
-     rester valide après redémarrage) ;
+     `--control-plane-endpoint` pointant l'**IP privée** de kube-1 (corrigé
+     après un échec réel : une instance AWS ne peut pas se joindre
+     elle-même via son IP publique — pas de hairpin NAT sur l'IGW — donc
+     kubelet timeout indéfiniment en essayant d'atteindre l'apiserver sur
+     l'IP publique. L'IP privée est stable "inside the VPC" et joignable par
+     les 3 nœuds. L'accès externe au control plane, si nécessaire plus tard,
+     passera par un autre mécanisme) ;
    - `kubeadm-join` : exécuté sur kube-2/kube-3 ;
    - installation de Calico (CNI) après l'init.
 5. **Vérification** — `kubectl get nodes` doit montrer 3 nœuds `Ready`. Le
