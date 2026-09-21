@@ -98,17 +98,18 @@ encrypted network, independent of the VPC.
    sudo tailscale up --advertise-tags=tag:kube-project
    ```
    Open the URL it prints to link the device to your tailnet, tagged
-   `tag:kube-project` (keep it a dedicated tag — don't reuse a personal one,
-   so this stays separate from any of your own devices on the same tailnet).
+   `tag:kube-project`. Using a dedicated tag (rather than leaving the device
+   untagged) keeps it a distinct, individually shareable identity in the
+   tailnet, separate from whatever else runs on that account.
 2. **In your tailnet's ACL** (`https://login.tailscale.com/admin/acls`), add
    a grant allowing your own device(s) to reach it, e.g.:
    ```json
    {"src": ["autogroup:member"], "dst": ["tag:kube-project"], "ip": ["*"]}
    ```
    Careful: **once a device itself carries a tag, it no longer matches
-   `autogroup:member`** as a source — it's only reachable by rules that name
-   its tag explicitly. If your own machine is tagged, use that tag as `src`
-   instead of `autogroup:member`.
+   `autogroup:member`** as a source in grants — only rules naming that tag
+   explicitly apply to it. If the machine you're connecting *from* is also
+   tagged, use its tag as `src` instead of `autogroup:member`.
 3. **Install the Tailscale client** on your own machine and sign in to the
    same tailnet.
 4. **SSH config**: copy [`ssh-config.example`](ssh-config.example) into your
@@ -124,10 +125,11 @@ encrypted network, independent of the VPC.
      icacls "<path>" /inheritance:r
      icacls "<path>" /grant:r "$($env:USERNAME):(F)"
      ```
-5. **Sharing with teammates**: don't add them to your whole tailnet (that
-   would expose your own personal devices too). Instead, use Tailscale's
-   per-device **"Share"** feature (admin console → the `ip-10-0-0-49`
-   device → Share) to give each teammate access to just that one machine.
+5. **Sharing with teammates**: don't invite them to your whole tailnet (that
+   would expose whatever else is on that account). Instead, use Tailscale's
+   per-device **"Share"** feature (admin console → the kube-1 device, listed
+   under its AWS-assigned hostname, e.g. `ip-10-0-0-49` → Share) to give each
+   teammate access to just that one machine.
 
 ## Known operational caveats
 
