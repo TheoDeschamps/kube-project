@@ -1,0 +1,36 @@
+# SSH client config template for accessing kube-1/2/3 over Tailscale.
+#
+# Copy the blocks below into your own SSH config:
+#   - Linux/macOS/WSL: ~/.ssh/config
+#   - Windows (PowerShell, not WSL): C:\Users\<you>\.ssh\config
+#
+# Then replace <PATH_TO_PRIVATE_KEY> with the actual path to
+# secrets/kube_project_id_ed25519 on your machine (keep the quotes on
+# Windows if the path contains spaces).
+#
+# Prerequisite: Tailscale installed and signed in on both your machine and
+# kube-1 (see README.md "Access over Tailscale"), and your machine's device
+# tag/identity allowed to reach tag:kube-project in the tailnet's ACL.
+
+Host kube1
+    HostName 100.114.21.88
+    User ec2-user
+    IdentityFile <PATH_TO_PRIVATE_KEY>
+
+Host kube2
+    HostName 10.0.0.80
+    User ec2-user
+    IdentityFile <PATH_TO_PRIVATE_KEY>
+    ProxyJump kube1
+
+Host kube3
+    HostName 10.0.0.93
+    User ec2-user
+    IdentityFile <PATH_TO_PRIVATE_KEY>
+    ProxyJump kube1
+
+# kube2/kube3 use their private IP, reached by jumping through kube1 (the
+# only node on Tailscale) -- they have no stable public IP and aren't
+# reachable directly. If these IPs ever change (e.g. after the nightly
+# shutdown/restart), check infra/ansible/inventory/hosts.ini for the
+# current values.

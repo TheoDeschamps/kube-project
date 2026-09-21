@@ -85,6 +85,50 @@ ansible-playbook playbooks/site.yml
 The playbook is safe to re-run — it's idempotent and won't disrupt a running
 cluster.
 
+## Access over Tailscale (day-to-day SSH)
+
+SSM sessions work but are clunky for everyday use (no scp, no ProxyJump, one
+command at a time). Tailscale gives normal `ssh`/`scp` access instead,
+without opening anything in the security group — it tunnels over its own
+encrypted network, independent of the VPC.
+
+1. **On `kube-1`** (over an SSM session, as `ec2-user`):
+   ```bash
+   curl -fsSL https://tailscale.com/install.sh | sh
+   sudo tailscale up --advertise-tags=tag:kube-project
+   ```
+   Open the URL it prints to link the device to your tailnet, tagged
+   `tag:kube-project` (keep it a dedicated tag — don't reuse a personal one,
+   so this stays separate from any of your own devices on the same tailnet).
+2. **In your tailnet's ACL** (`https://login.tailscale.com/admin/acls`), add
+   a grant allowing your own device(s) to reach it, e.g.:
+   ```json
+   {"src": ["autogroup:member"], "dst": ["tag:kube-project"], "ip": ["*"]}
+   ```
+   Careful: **once a device itself carries a tag, it no longer matches
+   `autogroup:member`** as a source — it's only reachable by rules that name
+   its tag explicitly. If your own machine is tagged, use that tag as `src`
+   instead of `autogroup:member`.
+3. **Install the Tailscale client** on your own machine and sign in to the
+   same tailnet.
+4. **SSH config**: copy [`ssh-config.example`](ssh-config.example) into your
+   own `~/.ssh/config` (or `C:\Users\<you>\.ssh\config` on Windows), and
+   replace `<PATH_TO_PRIVATE_KEY>` with your local path to
+   `secrets/kube_project_id_ed25519`. Then `ssh kube1` / `ssh kube2` /
+   `ssh kube3` just work (kube2/kube3 are reached via a `ProxyJump` through
+   kube1, since only kube1 is on Tailscale and they have no stable public
+   IP).
+   - **Windows only**: the OpenSSH client rejects world-readable files.
+     After creating/editing the config or key, run:
+     ```powershell
+     icacls "<path>" /inheritance:r
+     icacls "<path>" /grant:r "$($env:USERNAME):(F)"
+     ```
+5. **Sharing with teammates**: don't add them to your whole tailnet (that
+   would expose your own personal devices too). Instead, use Tailscale's
+   per-device **"Share"** feature (admin console → the `ip-10-0-0-49`
+   device → Share) to give each teammate access to just that one machine.
+
 ## Known operational caveats
 
 - `kube-2`/`kube-3`'s private IPs are recorded in `inventory/hosts.ini`. If
