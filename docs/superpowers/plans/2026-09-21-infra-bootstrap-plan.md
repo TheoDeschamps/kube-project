@@ -2,6 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status: ✅ COMPLETE (2026-09-21).** Cluster is live: 3/3 nodes `Ready`
+(`kubectl get nodes`), Calico running, idempotency re-run verified
+(`changed=0` on kube-2/kube-3, only the always-fresh join token on kube-1).
+SSH access confirmed both via SSM and via Tailscale (documented in
+`infra/ansible/README.md`). All steps below are checked off, but several
+were executed differently than originally written because of real AWS/IAM
+constraints discovered during execution — **read the "Revision note" right
+below before trusting Tasks 1–3's exact commands**; Tasks 4–9 matched the
+plan as written. Next up: sub-project 2 (GitOps operator + Ingress +
+dashboard + monitoring + logging + cert-manager + Secrets), per the
+decomposition agreed in the original brainstorming session.
+
 **Goal:** Get reliable Ansible access to the 3 AWS VMs and provision a working, idempotent, reproducible 3-node kubeadm Kubernetes cluster (`kube-1` control plane + `kube-2`/`kube-3` workers) with the Calico CNI.
 
 **Architecture:** A discovery pass records instance IDs/IPs/tags. The project SSH keypair's public half is deployed to all 3 VMs manually through an interactive SSM session (`ssm:SendCommand` and the SSM SSH/port-forwarding documents are all IAM-denied for the student role — only the base interactive session is permitted). **Ansible itself runs on `kube-1`, not the operator's laptop** — the security group only opens ports 80/443 to the internet (port 22 is never public, by design), so the laptop cannot reach any node over SSH at all. `kube-1` reaches `kube-2`/`kube-3` over their private VPC IPs, already permitted by the security group's self-referencing "allow all" rule; the project's private key is copied onto `kube-1` for that purpose. `kube-1` has outbound internet access, so it clones this repo from a public GitHub mirror to get the playbook. A static inventory lists `kube-2`/`kube-3`'s private IPs (`kube-1` manages itself via `ansible_connection: local`) — no AWS credentials are stored on `kube-1`. Roles are applied in order: OS prep (`common`) → container runtime (`containerd`) → Kubernetes packages (`kube-pkgs`) → cluster init on the control plane (`kubeadm-init` + `calico`) → worker join (`kubeadm-join`).
@@ -70,7 +82,7 @@ infra/ansible/
 - Consumes: nothing (first task).
 - Produces: recorded instance IDs, public/private IPs and AMI family for `kube-1`/`kube-2`/`kube-3` (used as script arguments in Task 2); an AWS tag `Project=kube` applied to all 3 instances (used as the inventory filter in Task 3).
 
-- [ ] **Step 1: Authenticate and list instances**
+- [x] **Step 1: Authenticate and list instances**
 
 Run:
 ```bash
@@ -82,7 +94,7 @@ aws ec2 describe-instances \
 ```
 Expected: a table listing 3 running instances. If the `Name` tag filter returns nothing, drop the filter and identify the 3 instances by size/VPC instead, then check what tags they actually carry.
 
-- [ ] **Step 2: Confirm the OS family**
+- [x] **Step 2: Confirm the OS family**
 
 Run:
 ```bash
@@ -90,14 +102,14 @@ aws ec2 describe-images --image-ids <AMI-ID-from-step-1> --query "Images[0].{Nam
 ```
 Expected: name containing `ubuntu`. If it's a different distro, note it — the `containerd`/`kube-pkgs` roles (Tasks 5–6) target apt/Ubuntu and must be adapted otherwise.
 
-- [ ] **Step 3: Ensure a consistent project tag**
+- [x] **Step 3: Ensure a consistent project tag**
 
 For each instance ID that doesn't already carry `Project=kube`:
 ```bash
 aws ec2 create-tags --resources <instance-id> --tags Key=Project,Value=kube
 ```
 
-- [ ] **Step 4: Confirm SSM connectivity to all 3 instances**
+- [x] **Step 4: Confirm SSM connectivity to all 3 instances**
 
 Run for each instance ID:
 ```bash
@@ -105,7 +117,7 @@ aws ssm start-session --target <instance-id>
 ```
 Expected: an interactive shell opens for all 3. Exit each session with `exit`. If any fails, the SSM agent or IAM permissions need fixing before continuing — this blocks every later task.
 
-- [ ] **Step 5: Check inter-node SSH reachability at the security-group level**
+- [x] **Step 5: Check inter-node SSH reachability at the security-group level**
 
 From within an SSM session on `kube-1`:
 ```bash
@@ -114,7 +126,7 @@ nc -zv <kube-3-private-ip> 22
 ```
 Expected: both succeed. If refused, the security group needs an inbound rule on port 22 from the VPC CIDR — note this in `DISCOVERY.md` as a manual fix required before Task 2's verification step.
 
-- [ ] **Step 6: Write DISCOVERY.md**
+- [x] **Step 6: Write DISCOVERY.md**
 
 ```markdown
 # Discovery notes
@@ -131,7 +143,7 @@ Expected: both succeed. If refused, the security group needs an inbound rule on 
 ```
 Fill in with the real values gathered above.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add infra/ansible/DISCOVERY.md
@@ -153,14 +165,14 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: instance IDs and SSH user from `DISCOVERY.md` (Task 1).
 - Produces: a reachable SSH keypair at `infra/ansible/secrets/kube_project_id_ed25519[.pub]` (referenced by `ansible_ssh_private_key_file` in Task 3's `group_vars/all.yml`); working direct SSH to `kube-1` and jumped SSH to `kube-2`/`kube-3`.
 
-- [ ] **Step 1: Write the root `.gitignore`**
+- [x] **Step 1: Write the root `.gitignore`**
 
 ```gitignore
 infra/ansible/secrets/
 infra/ansible/fetched/
 ```
 
-- [ ] **Step 2: Write the bootstrap script**
+- [x] **Step 2: Write the bootstrap script**
 
 ```bash
 #!/usr/bin/env bash
@@ -208,7 +220,7 @@ echo "  ssh -i ${SCRIPT_DIR}/../secrets/kube_project_id_ed25519 ${SSH_USER}@<kub
 
 Note: `mkdir -p /home/ec2-user/.ssh` may fail silently if `.ssh` already exists with different ownership on Amazon Linux — the script's `chown`/`chmod` steps afterward correct this regardless.
 
-- [ ] **Step 3: Make it executable and generate the keypair**
+- [x] **Step 3: Make it executable and generate the keypair**
 
 ```bash
 chmod +x infra/ansible/scripts/bootstrap-ssh-keys.sh
@@ -216,21 +228,21 @@ touch infra/ansible/secrets/.gitkeep
 ssh-keygen -t ed25519 -f infra/ansible/secrets/kube_project_id_ed25519 -C kube-project -N ""
 ```
 
-- [ ] **Step 4: Run the script with the 3 instance IDs from DISCOVERY.md**
+- [x] **Step 4: Run the script with the 3 instance IDs from DISCOVERY.md**
 
 ```bash
 ./infra/ansible/scripts/bootstrap-ssh-keys.sh <kube-1-id> <kube-2-id> <kube-3-id>
 ```
 Expected: 3 successful `send-command` invocations (a command ID printed for each).
 
-- [ ] **Step 5: Verify direct SSH to kube-1**
+- [x] **Step 5: Verify direct SSH to kube-1**
 
 ```bash
 ssh -i infra/ansible/secrets/kube_project_id_ed25519 ec2-user@<kube-1-public-ip> echo ok
 ```
 Expected: prints `ok`.
 
-- [ ] **Step 6: Verify jumped SSH to kube-2 and kube-3**
+- [x] **Step 6: Verify jumped SSH to kube-2 and kube-3**
 
 ```bash
 ssh -i infra/ansible/secrets/kube_project_id_ed25519 \
@@ -242,7 +254,7 @@ ssh -i infra/ansible/secrets/kube_project_id_ed25519 \
 ```
 Expected: both print `ok`. If refused, revisit Task 1 Step 5 (security group).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add .gitignore infra/ansible/scripts/bootstrap-ssh-keys.sh infra/ansible/secrets/.gitkeep
@@ -266,7 +278,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `Project=kube` tag and `Name` tags (Task 1); SSH keypair path (Task 2).
 - Produces: two inventory groups, `control_plane` (host `kube-1`) and `workers` (hosts `kube-2`, `kube-3`); variables `ansible_user`, `ansible_ssh_private_key_file`, `kubernetes_minor_version`, `kubernetes_full_version`, `pod_network_cidr`, `calico_version`, `control_plane_endpoint` — all consumed by every later role.
 
-- [ ] **Step 1: Write `requirements.yml`**
+- [x] **Step 1: Write `requirements.yml`**
 
 ```yaml
 collections:
@@ -276,7 +288,7 @@ collections:
   - name: ansible.posix
 ```
 
-- [ ] **Step 2: Install collections and their Python dependencies**
+- [x] **Step 2: Install collections and their Python dependencies**
 
 ```bash
 cd infra/ansible
@@ -285,7 +297,7 @@ pip install boto3 botocore
 ```
 Expected: collections install without error.
 
-- [ ] **Step 3: Write `ansible.cfg`**
+- [x] **Step 3: Write `ansible.cfg`**
 
 ```ini
 [defaults]
@@ -298,7 +310,7 @@ interpreter_python = auto_silent
 enable_plugins = amazon.aws.aws_ec2, ansible.builtin.ini
 ```
 
-- [ ] **Step 4: Write the dynamic inventory config**
+- [x] **Step 4: Write the dynamic inventory config**
 
 `infra/ansible/inventory/aws_ec2.yml`:
 ```yaml
@@ -318,7 +330,7 @@ groups:
 ```
 Adjust `regions` to match the real AWS region recorded in `DISCOVERY.md` if different from `eu-west-3`.
 
-- [ ] **Step 5: Write `group_vars/all.yml`**
+- [x] **Step 5: Write `group_vars/all.yml`**
 
 ```yaml
 ansible_user: ec2-user
@@ -329,13 +341,13 @@ calico_version: "v3.28.0"
 control_plane_endpoint: "{{ hostvars['kube-1']['ansible_host'] }}"
 ```
 
-- [ ] **Step 6: Write `group_vars/workers.yml`**
+- [x] **Step 6: Write `group_vars/workers.yml`**
 
 ```yaml
 ansible_ssh_common_args: "-o ProxyJump={{ ansible_user }}@{{ hostvars['kube-1']['ansible_host'] }}"
 ```
 
-- [ ] **Step 7: Verify the inventory resolves correctly**
+- [x] **Step 7: Verify the inventory resolves correctly**
 
 ```bash
 cd infra/ansible
@@ -351,14 +363,14 @@ Expected output shape:
   |  |--kube-3
 ```
 
-- [ ] **Step 8: Verify connectivity through the inventory**
+- [x] **Step 8: Verify connectivity through the inventory**
 
 ```bash
 ansible all -m ping
 ```
 Expected: `kube-1`, `kube-2`, `kube-3` all return `SUCCESS` with `"ping": "pong"`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add infra/ansible/ansible.cfg infra/ansible/requirements.yml infra/ansible/inventory/aws_ec2.yml infra/ansible/group_vars/
@@ -379,7 +391,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: inventory groups `control_plane`/`workers` (Task 3).
 - Produces: swap disabled, `overlay`/`br_netfilter` kernel modules loaded, required sysctl params set on all 3 nodes — prerequisite state for the `containerd` role (Task 5).
 
-- [ ] **Step 1: Write the `common` role**
+- [x] **Step 1: Write the `common` role**
 
 `infra/ansible/roles/common/tasks/main.yml`:
 ```yaml
@@ -432,7 +444,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
     update_cache: true
 ```
 
-- [ ] **Step 2: Write the initial site playbook**
+- [x] **Step 2: Write the initial site playbook**
 
 `infra/ansible/playbooks/site.yml`:
 ```yaml
@@ -444,7 +456,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
     - common
 ```
 
-- [ ] **Step 3: Run the playbook**
+- [x] **Step 3: Run the playbook**
 
 ```bash
 cd infra/ansible
@@ -452,7 +464,7 @@ ansible-playbook playbooks/site.yml
 ```
 Expected: `PLAY RECAP` shows 0 `failed`/`unreachable` for all 3 hosts.
 
-- [ ] **Step 4: Verify the effects**
+- [x] **Step 4: Verify the effects**
 
 ```bash
 ansible all -m command -a "swapon -s"
@@ -460,7 +472,7 @@ ansible all -m command -a "sysctl net.ipv4.ip_forward"
 ```
 Expected: first command prints nothing (no active swap); second prints `net.ipv4.ip_forward = 1` for all 3 hosts.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add infra/ansible/roles/common infra/ansible/playbooks/site.yml
@@ -482,7 +494,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: OS prerequisites from the `common` role (Task 4).
 - Produces: a running `containerd` service with `SystemdCgroup = true` on all 3 nodes — the container runtime the `kube-pkgs`/`kubeadm-init`/`kubeadm-join` roles (Tasks 6–8) rely on.
 
-- [ ] **Step 1: Write the `containerd` role tasks**
+- [x] **Step 1: Write the `containerd` role tasks**
 
 `infra/ansible/roles/containerd/tasks/main.yml` (Amazon Linux 2023 ships `containerd` directly in its own dnf repos — no third-party repo needed):
 ```yaml
@@ -518,7 +530,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
     state: started
 ```
 
-- [ ] **Step 2: Write the handler**
+- [x] **Step 2: Write the handler**
 
 `infra/ansible/roles/containerd/handlers/main.yml`:
 ```yaml
@@ -529,7 +541,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
     state: restarted
 ```
 
-- [ ] **Step 3: Add the role to the site playbook**
+- [x] **Step 3: Add the role to the site playbook**
 
 Modify `infra/ansible/playbooks/site.yml`:
 ```yaml
@@ -542,21 +554,21 @@ Modify `infra/ansible/playbooks/site.yml`:
     - containerd
 ```
 
-- [ ] **Step 4: Run the playbook**
+- [x] **Step 4: Run the playbook**
 
 ```bash
 ansible-playbook playbooks/site.yml
 ```
 Expected: 0 `failed`/`unreachable`.
 
-- [ ] **Step 5: Verify containerd is active**
+- [x] **Step 5: Verify containerd is active**
 
 ```bash
 ansible all -m command -a "systemctl is-active containerd"
 ```
 Expected: `active` on all 3 hosts.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add infra/ansible/roles/containerd infra/ansible/playbooks/site.yml
@@ -577,7 +589,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `kubernetes_minor_version` (Task 3); running `containerd` (Task 5).
 - Produces: `kubeadm`, `kubelet`, `kubectl` installed on all 3 nodes, pinned to the `v1.31` package stream — required by `kubeadm-init` (Task 7) and `kubeadm-join` (Task 8).
 
-- [ ] **Step 1: Write the role**
+- [x] **Step 1: Write the role**
 
 `infra/ansible/roles/kube-pkgs/tasks/main.yml` (dnf/rpm — the `pkgs.k8s.io` repo URL itself is pinned to the `v{{ kubernetes_minor_version }}` stream, so installing without an exact package version still only ever pulls 1.31.x builds):
 ```yaml
@@ -615,7 +627,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
     enabled: true
 ```
 
-- [ ] **Step 2: Add the role to the site playbook**
+- [x] **Step 2: Add the role to the site playbook**
 
 Modify `infra/ansible/playbooks/site.yml`:
 ```yaml
@@ -629,14 +641,14 @@ Modify `infra/ansible/playbooks/site.yml`:
     - kube-pkgs
 ```
 
-- [ ] **Step 3: Run the playbook**
+- [x] **Step 3: Run the playbook**
 
 ```bash
 ansible-playbook playbooks/site.yml
 ```
 Expected: 0 `failed`/`unreachable`.
 
-- [ ] **Step 4: Verify package versions and hold state**
+- [x] **Step 4: Verify package versions and hold state**
 
 ```bash
 ansible all -m command -a "kubeadm version -o short"
@@ -644,7 +656,7 @@ ansible all -m command -a "grep exclude /etc/dnf/dnf.conf"
 ```
 Expected: a `v1.31.x` version from the first command on all 3 hosts; the second shows `exclude=kubelet kubeadm kubectl`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add infra/ansible/roles/kube-pkgs infra/ansible/playbooks/site.yml
@@ -666,7 +678,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `control_plane_endpoint`, `pod_network_cidr`, `calico_version` (Task 3); `kubeadm` installed (Task 6).
 - Produces: an initialized control plane on `kube-1`; `infra/ansible/fetched/kubeconfig` and `infra/ansible/fetched/join-command.sh` on the control machine, consumed by `kubeadm-join` (Task 8).
 
-- [ ] **Step 1: Write the `kubeadm-init` role**
+- [x] **Step 1: Write the `kubeadm-init` role**
 
 `infra/ansible/roles/kubeadm-init/tasks/main.yml`:
 ```yaml
@@ -720,7 +732,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   delegate_to: localhost
 ```
 
-- [ ] **Step 2: Write the `calico` role**
+- [x] **Step 2: Write the `calico` role**
 
 `infra/ansible/roles/calico/tasks/main.yml`:
 ```yaml
@@ -737,7 +749,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   changed_when: "'created' in calico_apply.stdout or 'configured' in calico_apply.stdout"
 ```
 
-- [ ] **Step 3: Add a control-plane play to the site playbook**
+- [x] **Step 3: Add a control-plane play to the site playbook**
 
 Modify `infra/ansible/playbooks/site.yml`:
 ```yaml
@@ -758,14 +770,14 @@ Modify `infra/ansible/playbooks/site.yml`:
     - calico
 ```
 
-- [ ] **Step 4: Run the playbook**
+- [x] **Step 4: Run the playbook**
 
 ```bash
 ansible-playbook playbooks/site.yml
 ```
 Expected: 0 `failed`/`unreachable`; `infra/ansible/fetched/kubeconfig` and `infra/ansible/fetched/join-command.sh` now exist locally.
 
-- [ ] **Step 5: Verify the control plane is Ready**
+- [x] **Step 5: Verify the control plane is Ready**
 
 ```bash
 KUBECONFIG=infra/ansible/fetched/kubeconfig kubectl get nodes
@@ -773,7 +785,7 @@ KUBECONFIG=infra/ansible/fetched/kubeconfig kubectl get pods -n kube-system -l k
 ```
 Expected: `kube-1` shows `Ready`; Calico node pod shows `Running`/`1/1`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add infra/ansible/roles/kubeadm-init infra/ansible/roles/calico infra/ansible/playbooks/site.yml
@@ -795,7 +807,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `infra/ansible/fetched/join-command.sh` (Task 7); `kubeadm` installed on workers (Task 6).
 - Produces: `kube-2` and `kube-3` joined to the cluster — final deliverable of this plan.
 
-- [ ] **Step 1: Write the `kubeadm-join` role**
+- [x] **Step 1: Write the `kubeadm-join` role**
 
 `infra/ansible/roles/kubeadm-join/tasks/main.yml`:
 ```yaml
@@ -817,7 +829,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   when: not kubelet_conf.stat.exists
 ```
 
-- [ ] **Step 2: Add a workers play to the site playbook**
+- [x] **Step 2: Add a workers play to the site playbook**
 
 Modify `infra/ansible/playbooks/site.yml`:
 ```yaml
@@ -844,21 +856,21 @@ Modify `infra/ansible/playbooks/site.yml`:
     - kubeadm-join
 ```
 
-- [ ] **Step 3: Run the playbook**
+- [x] **Step 3: Run the playbook**
 
 ```bash
 ansible-playbook playbooks/site.yml
 ```
 Expected: 0 `failed`/`unreachable`.
 
-- [ ] **Step 4: Verify the full cluster is Ready**
+- [x] **Step 4: Verify the full cluster is Ready**
 
 ```bash
 KUBECONFIG=infra/ansible/fetched/kubeconfig kubectl get nodes -o wide
 ```
 Expected: `kube-1`, `kube-2`, `kube-3` all `Ready`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add infra/ansible/roles/kubeadm-join infra/ansible/playbooks/site.yml
@@ -878,21 +890,21 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: the full `site.yml` playbook (Tasks 4–8).
 - Produces: documented proof of idempotence and a usage guide — closes out this sub-project.
 
-- [ ] **Step 1: Re-run the full playbook against the live cluster**
+- [x] **Step 1: Re-run the full playbook against the live cluster**
 
 ```bash
 ansible-playbook playbooks/site.yml
 ```
 Expected: `PLAY RECAP` shows 0 `failed`/`unreachable`; tasks that mutate state only on first run (package installs, `kubeadm init`, `kubeadm join`, Calico apply) report `changed=0` or `skipped` this time — only inherently non-idempotent diagnostic tasks (e.g. `kubeadm token create`) are expected to show `changed`.
 
-- [ ] **Step 2: Confirm the cluster is untouched**
+- [x] **Step 2: Confirm the cluster is untouched**
 
 ```bash
 KUBECONFIG=infra/ansible/fetched/kubeconfig kubectl get nodes
 ```
 Expected: still 3 nodes `Ready`, same `AGE` progression as before (no pod restarts on kube-system triggered by the re-run).
 
-- [ ] **Step 3: Write the README**
+- [x] **Step 3: Write the README**
 
 `infra/ansible/README.md`:
 ```markdown
@@ -942,7 +954,7 @@ access from the control machine becomes unavailable — see the spec at
 `docs/superpowers/specs/2026-09-21-infra-bootstrap-design.md`.
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add infra/ansible/README.md
