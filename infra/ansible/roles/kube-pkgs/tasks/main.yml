@@ -1,0 +1,30 @@
+---
+- name: Add the Kubernetes dnf repository
+  ansible.builtin.yum_repository:
+    name: kubernetes
+    description: Kubernetes
+    baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_minor_version }}/rpm/"
+    enabled: true
+    gpgcheck: true
+    gpgkey: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_minor_version }}/rpm/repodata/repomd.xml.key"
+    exclude: kubelet kubeadm kubectl cri-tools kubernetes-cni
+
+- name: Install kubelet, kubeadm, kubectl
+  ansible.builtin.dnf:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+    disable_excludes: kubernetes
+
+- name: Prevent kubelet/kubeadm/kubectl from being upgraded by later dnf runs
+  ansible.builtin.lineinfile:
+    path: /etc/dnf/dnf.conf
+    line: "exclude=kubelet kubeadm kubectl"
+    create: true
+
+- name: Ensure kubelet is enabled
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true

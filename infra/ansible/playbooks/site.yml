@@ -1,0 +1,21 @@
+---
+- name: Prepare all nodes
+  hosts: all
+  become: true
+  roles:
+    - common
+    - containerd
+    - kube-pkgs
+
+- name: Initialize the control plane
+  hosts: control_plane
+  become: true
+  roles:
+    - kubeadm-init
+    - calico
+
+- name: Join worker nodes
+  hosts: workers
+  become: true
+  roles:
+    - kubeadm-join

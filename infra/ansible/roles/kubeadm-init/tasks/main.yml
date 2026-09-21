@@ -1,0 +1,48 @@
+---
+- name: Check if the control plane is already initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_admin_conf
+
+- name: Run kubeadm init
+  ansible.builtin.command: >
+    kubeadm init
+    --control-plane-endpoint={{ control_plane_endpoint }}:6443
+    --pod-network-cidr={{ pod_network_cidr }}
+    --upload-certs
+  when: not kubeadm_admin_conf.stat.exists
+
+- name: Create .kube directory for the ansible_user
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+
+- name: Copy admin.conf into the user's kubeconfig
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    remote_src: true
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+
+- name: Fetch kubeconfig to the control machine
+  ansible.builtin.fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ playbook_dir }}/../fetched/kubeconfig"
+    flat: true
+
+- name: Generate a fresh kubeadm join command
+  ansible.builtin.command: kubeadm token create --print-join-command
+  register: kubeadm_join_command
+  changed_when: false
+
+- name: Save the join command on the control machine
+  ansible.builtin.copy:
+    content: "{{ kubeadm_join_command.stdout }}\n"
+    dest: "{{ playbook_dir }}/../fetched/join-command.sh"
+    mode: "0600"
+  delegate_to: localhost

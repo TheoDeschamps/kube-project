@@ -1,0 +1,13 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - eu-west-3
+filters:
+  tag:Project: kube
+  instance-state-name: running
+hostnames:
+  - tag:Name
+compose:
+  ansible_host: "(public_ip_address if (tags.Name | default('')) == 'kube-1' else private_ip_address)"
+groups:
+  control_plane: "(tags.Name | default('')) == 'kube-1'"
+  workers: "(tags.Name | default('')) in ['kube-2', 'kube-3']"

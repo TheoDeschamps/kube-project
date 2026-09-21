@@ -1,0 +1,16 @@
+---
+- name: Check if this node already joined the cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Read the join command from the control machine
+  ansible.builtin.slurp:
+    src: "{{ playbook_dir }}/../fetched/join-command.sh"
+  register: join_command_file
+  delegate_to: localhost
+  when: not kubelet_conf.stat.exists
+
+- name: Run kubeadm join
+  ansible.builtin.command: "{{ join_command_file.content | b64decode }}"
+  when: not kubelet_conf.stat.exists
