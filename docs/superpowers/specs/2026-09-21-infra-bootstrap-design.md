@@ -43,18 +43,41 @@ sous-projets suivants.
 Compatible kubeadm, supporte nativement les NetworkPolicy (utile pour le
 bonus "reinforcement of network access").
 
-### Transport Ansible : SSH + ProxyJump via kube-1
+### Transport Ansible : control node sur kube-1 (révisé après découverte réelle)
 
-`kube-2`/`kube-3` n'ont pas d'IP publique stable, donc injoignables
-directement depuis le poste de contrôle (laptop). `kube-1` sert de jump host
-(IP publique stable + IP privée dans le même VPC que kube-2/3).
+Décision initiale : SSH + ProxyJump via kube-1 depuis le poste de contrôle
+(laptop). **Invalidée par la découverte réelle de l'infra** (2026-09-21) :
 
-Alternatives écartées :
-- Ansible control node sur kube-1 lui-même : viable mais workflow moins
-  pratique pour itérer depuis l'éditeur local.
-- Plugin de connexion `aws_ssm` : évite la gestion de clés SSH mais ajoute
-  des dépendances (session-manager-plugin, boto3/botocore, bucket S3 pour le
-  transfert de fichiers). Non retenu pour la simplicité.
+- Le security group (`sg-004c3459ff99cf637`) n'autorise en entrée que les
+  ports 80/443 depuis Internet — le port 22 n'est **jamais** ouvert
+  publiquement, par design (cohérent avec "SSM au lieu de SSH public" dans
+  le sujet). SSH direct depuis le laptop vers kube-1 est donc impossible,
+  et on ne rouvre pas ce port (irait à l'encontre de l'esprit sécurité du
+  projet, qui note justement ça).
+- Le rôle IAM étudiant n'autorise que la session SSM interactive de base
+  (`ssm:StartSession` sur le document par défaut) — ni `ssm:SendCommand`,
+  ni les documents `AWS-StartSSHSession`/`AWS-StartPortForwardingSession`
+  (testés, tous refusés). Impossible de tunneliser du SSH via SSM non plus.
+
+Solution retenue : **Ansible tourne directement sur kube-1** (l'alternative
+initialement écartée pour confort de workflow). kube-1 → kube-2/kube-3 en
+SSH sur IP privée est déjà couvert par la règle "all traffic from self" du
+security group. kube-1 a un accès Internet sortant, donc il peut cloner le
+dépôt Git (poussé sur un repo GitHub public dédié) et s'auto-suffire. Zéro
+permission AWS supplémentaire nécessaire au-delà de la session SSM de base,
+déjà confirmée fonctionnelle.
+
+La clé SSH publique du projet a été déployée manuellement sur les 3 nœuds
+via une session SSM interactive + `sudo tee` (le script `send-command`
+automatisé du plan initial ne fonctionne pas, cf. ci-dessus). La clé privée
+est copiée sur kube-1 pour lui permettre d'initier le SSH sortant vers
+kube-2/kube-3.
+
+Plugin de connexion `aws_ssm` (écarté à nouveau) : aurait évité ce détour,
+mais nécessite un bucket S3 pour le transfert de fichiers et un rôle IAM
+d'instance dédié — plus de surface de permissions à valider, alors que la
+solution "control node sur kube-1" ne demande rien de plus que ce qui est
+déjà confirmé fonctionnel.
 
 ### Bootstrap des clés SSH : script SSM, hors Ansible
 
@@ -64,15 +87,18 @@ donc un script séparé (`aws ssm send-command` avec le document
 sur les 3 instances en une seule fois. Ce script est versionné et documenté
 dans le repo (pas un geste manuel non reproductible).
 
-### Inventaire : dynamique (`amazon.aws.aws_ec2`), avec un inventaire statique documenté en secours
+### Inventaire : statique (révisé — c'était le plan B)
 
-Les IP privées de kube-2/kube-3 ne sont pas garanties stables après un
-redémarrage (à vérifier lors de la découverte — le sujet dit stables "inside
-the VPC", mais un inventaire dynamique reste plus sûr et zéro-maintenance).
-Le plugin d'inventaire dynamique AWS interroge l'API EC2 à chaque run
-Ansible. Un inventaire statique (`inventory.ini` à mettre à jour à la main)
-reste documenté comme solution de repli si le dynamique pose problème
-(droits IAM, dépendances Python, etc.).
+Avec Ansible qui tourne sur kube-1 lui-même, l'inventaire dynamique
+`amazon.aws.aws_ec2` perdrait son intérêt principal (éviter la maintenance
+manuelle des IPs) tout en ajoutant un vrai inconvénient : il faudrait
+stocker des identifiants AWS SSO sur kube-1, une machine plus exposée que le
+laptop. On utilise donc un inventaire statique (`inventory.ini`), avec
+seulement les IP privées de kube-2/kube-3 (kube-1 se gère lui-même en
+`ansible_connection: local`). Si les IPs privées changent après un arrêt
+nocturne (à vérifier en pratique), l'inventaire est mis à jour à la main —
+c'était déjà la solution de repli documentée dans la première version de
+cette décision.
 
 ### Structure de repo : monorepo unique fourni par Epitech
 

@@ -4,7 +4,7 @@
 
 **Goal:** Get reliable Ansible access to the 3 AWS VMs and provision a working, idempotent, reproducible 3-node kubeadm Kubernetes cluster (`kube-1` control plane + `kube-2`/`kube-3` workers) with the Calico CNI.
 
-**Architecture:** A discovery pass records instance IDs/IPs/tags. A one-off SSM script deploys a project SSH keypair to all 3 VMs (Ansible can't reach them before this). From then on, Ansible on the operator's laptop connects over SSH — direct to `kube-1` (stable public IP), and to `kube-2`/`kube-3` via `ProxyJump` through `kube-1` (their public IPs are not stable, their private VPC IPs are). A dynamic `amazon.aws.aws_ec2` inventory keeps host IPs current across nightly shutdown/restart cycles. Roles are applied in order: OS prep (`common`) → container runtime (`containerd`) → Kubernetes packages (`kube-pkgs`) → cluster init on the control plane (`kubeadm-init` + `calico`) → worker join (`kubeadm-join`).
+**Architecture:** A discovery pass records instance IDs/IPs/tags. The project SSH keypair's public half is deployed to all 3 VMs manually through an interactive SSM session (`ssm:SendCommand` and the SSM SSH/port-forwarding documents are all IAM-denied for the student role — only the base interactive session is permitted). **Ansible itself runs on `kube-1`, not the operator's laptop** — the security group only opens ports 80/443 to the internet (port 22 is never public, by design), so the laptop cannot reach any node over SSH at all. `kube-1` reaches `kube-2`/`kube-3` over their private VPC IPs, already permitted by the security group's self-referencing "allow all" rule; the project's private key is copied onto `kube-1` for that purpose. `kube-1` has outbound internet access, so it clones this repo from a public GitHub mirror to get the playbook. A static inventory lists `kube-2`/`kube-3`'s private IPs (`kube-1` manages itself via `ansible_connection: local`) — no AWS credentials are stored on `kube-1`. Roles are applied in order: OS prep (`common`) → container runtime (`containerd`) → Kubernetes packages (`kube-pkgs`) → cluster init on the control plane (`kubeadm-init` + `calico`) → worker join (`kubeadm-join`).
 
 **Tech Stack:** Ansible (`amazon.aws`, `community.general`, `ansible.posix` collections), AWS CLI v2 + SSM, kubeadm, containerd, Calico CNI, bash.
 
@@ -19,6 +19,15 @@
 - No plaintext secret (private key, kubeconfig, join token) is ever committed to git — all live under paths listed in `.gitignore` (Task 2).
 - The playbook must be safely re-runnable without breaking an existing cluster (idempotence), per the spec's "torn down and rebuilt reproducibly" requirement.
 - All file paths below are relative to the repo root (`D:\Projet Kube`), monorepo layout: `infra/ansible/...` holds everything in this plan.
+
+## Revision note (2026-09-21) — read before Tasks 2–3
+
+Real infra discovery invalidated two assumptions baked into the tasks below:
+
+1. **`ssm:SendCommand` and the SSM SSH/port-forwarding documents are IAM-denied** for the student role — only the base interactive `ssm:StartSession` works. Task 2's automated `bootstrap-ssh-keys.sh` script (using `send-command`) **does not work**; the public key was instead pasted manually into `/home/ec2-user/.ssh/authorized_keys` on each node through an interactive `aws ssm start-session` shell (connects as `ssm-user`, use `sudo` to write to `ec2-user`'s home).
+2. **The security group never opens port 22 to the internet** (only 80/443) — this is deliberate, matching the subject's "SSM instead of public SSH". The laptop cannot reach any node over SSH, so **Ansible runs on `kube-1` itself**, not the laptop. Task 3's dynamic-inventory/ProxyJump design is superseded by: a static inventory on `kube-1` (`kube-2`/`kube-3` by private IP, `kube-1` via `ansible_connection: local`), the project's private key copied onto `kube-1`, and this repo cloned onto `kube-1` from a public GitHub mirror (`kube-1` has outbound internet access; the laptop cannot push files to it directly either).
+
+Tasks 4–9 (the roles and the site playbook) are unaffected — they still apply the same way, just executed from an `ansible-playbook` running on `kube-1` against a local static inventory instead of from the laptop against a dynamic one. See the spec's revised "Transport Ansible" and "Inventaire" sections for the full rationale.
 
 ---
 
