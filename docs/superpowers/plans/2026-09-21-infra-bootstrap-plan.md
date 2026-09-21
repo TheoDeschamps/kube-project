@@ -599,7 +599,9 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
       - kubeadm
       - kubectl
     state: present
-    disable_excludes: kubernetes
+    disable_excludes: all  # "kubernetes" only disables the repo's own exclude, not the
+                            # global dnf.conf exclude this role adds below -- without "all"
+                            # a second (idempotent) run fails once that line exists.
 
 - name: Prevent kubelet/kubeadm/kubectl from being upgraded by later dnf runs
   ansible.builtin.lineinfile:

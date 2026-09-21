@@ -16,7 +16,7 @@
       - kubeadm
       - kubectl
     state: present
-    disable_excludes: kubernetes
+    disable_excludes: all
 
 - name: Prevent kubelet/kubeadm/kubectl from being upgraded by later dnf runs
   ansible.builtin.lineinfile:
