@@ -41,6 +41,29 @@ Real infra discovery invalidated two assumptions baked into the tasks below:
 
 Tasks 4–9 (the roles and the site playbook) are unaffected — they still apply the same way, just executed from an `ansible-playbook` running on `kube-1` against a local static inventory instead of from the laptop against a dynamic one. See the spec's revised "Transport Ansible" and "Inventaire" sections for the full rationale.
 
+## Follow-up work (not yet implemented)
+
+**Laptop-based execution via Tailscale.** Per instructor guidance
+(2026-09-24, see `docs/superpowers/PROJECT-NOTES.md`), Tailscale is
+considered network-layer infrastructure annex to the project, not part of
+the graded provisioning logic — so it's acceptable, once set up, for
+Ansible to run from the laptop against `kube-1`/`kube-2`/`kube-3` through
+it, rather than only from `kube-1` itself. Not implemented yet; when it is:
+
+- Add `inventory/hosts-tailscale.ini`: `kube-1` reached at its Tailscale IP
+  (currently `100.114.21.88`), `kube-2`/`kube-3` reached at their private
+  AWS IPs via `ansible_ssh_common_args: -o ProxyJump=ec2-user@100.114.21.88`
+  (same pattern already used in `ssh-config.example`).
+- Keep the existing `inventory/hosts.ini` (execution on `kube-1`, SSM-only,
+  no Tailscale dependency) as the fallback that always works, including for
+  the very first bootstrap of a brand new environment before Tailscale can
+  even be installed.
+- Decouple `control_plane_endpoint` from `ansible_host`: introduce a
+  dedicated `kube1_private_ip: "10.0.0.49"` variable in group_vars and point
+  `control_plane_endpoint` at that, so it stays correct (the cluster's
+  internal AWS private IP) no matter which inventory/transport Ansible
+  itself is using to reach the nodes.
+
 ---
 
 ## File Structure
