@@ -63,3 +63,21 @@ Treat this as a lens to keep applying when making design decisions in
 sub-projects 2-5: favor automation/reproducibility over one-off manual
 steps, and be ready to justify how a given choice supports "deploy a new
 app / a change, quickly" if asked during the defense.
+
+### 2026-09-24 — Monitoring first, once access/config is settled
+
+Once the access/configuration groundwork is done (sub-project 1, complete),
+the instructor advises tackling **monitoring first**, ahead of the other
+components bundled into sub-project 2 (GitOps operator, Ingress, dashboard,
+logging, cert-manager, Secrets).
+
+**Not yet actioned** — to apply when sub-project 2 is brainstormed: treat
+this as the priority order *within* sub-project 2 rather than a reason to
+reshuffle the 5-sub-project decomposition itself. Open question to resolve
+at that point: does "monitoring first" mean standing it up directly
+(`helm install`/`kubectl apply`) before the GitOps operator exists, then
+folding it under GitOps once the operator is in place — or does it mean the
+GitOps operator has to come first anyway (there needs to be *something* to
+reconcile monitoring's manifests) and "monitoring first" just means it's
+the first component the operator reconciles? Ask/decide this explicitly at
+the start of sub-project 2's brainstorming rather than assuming.
