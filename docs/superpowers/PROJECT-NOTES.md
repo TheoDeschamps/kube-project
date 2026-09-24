@@ -4,6 +4,13 @@ Cross-cutting requirements and guidance gathered along the way, that apply
 across sub-projects rather than to one specific spec. Check this before
 starting each new sub-project's brainstorming.
 
+## Milestones
+
+- **2026-09-21** — Follow-up #1: machine configurée, cluster qui tourne,
+  moyen d'accès SSH. Satisfait (sous-projet 1 complet).
+- **2026-12-15 (mi-décembre)** — Follow-up #2: objectif **90% du projet**
+  terminé.
+
 ## Instructor guidance log
 
 ### 2026-09-21 — Follow-up requirements
