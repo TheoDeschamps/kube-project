@@ -64,20 +64,24 @@ sub-projects 2-5: favor automation/reproducibility over one-off manual
 steps, and be ready to justify how a given choice supports "deploy a new
 app / a change, quickly" if asked during the defense.
 
-### 2026-09-24 — Monitoring first, once access/config is settled
+### 2026-09-24 — Component order within sub-project 2: dashboard, then monitoring
 
 Once the access/configuration groundwork is done (sub-project 1, complete),
-the instructor advises tackling **monitoring first**, ahead of the other
-components bundled into sub-project 2 (GitOps operator, Ingress, dashboard,
-logging, cert-manager, Secrets).
+the instructor's advised order for the rest is: **config (done) → dashboard
+→ monitoring**, ahead of the other components bundled into sub-project 2
+(GitOps operator, Ingress, logging, cert-manager, Secrets — order among
+those not specified).
 
 **Not yet actioned** — to apply when sub-project 2 is brainstormed: treat
 this as the priority order *within* sub-project 2 rather than a reason to
 reshuffle the 5-sub-project decomposition itself. Open question to resolve
-at that point: does "monitoring first" mean standing it up directly
+at that point: does this mean standing up dashboard/monitoring directly
 (`helm install`/`kubectl apply`) before the GitOps operator exists, then
-folding it under GitOps once the operator is in place — or does it mean the
-GitOps operator has to come first anyway (there needs to be *something* to
-reconcile monitoring's manifests) and "monitoring first" just means it's
-the first component the operator reconciles? Ask/decide this explicitly at
-the start of sub-project 2's brainstorming rather than assuming.
+folding them under GitOps once the operator is in place — or does the
+GitOps operator have to come first anyway (there needs to be *something* to
+reconcile their manifests) and "dashboard, then monitoring" just means
+they're the first two components the operator reconciles, in that order?
+Ask/decide this explicitly at the start of sub-project 2's brainstorming
+rather than assuming. Also note Ingress likely needs to land before or
+alongside dashboard, since the dashboard needs to be exposed/reachable to
+be useful — worth raising then too.
